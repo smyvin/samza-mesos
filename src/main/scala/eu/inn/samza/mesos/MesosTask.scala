@@ -25,6 +25,7 @@ import org.apache.mesos.Protos._
 import org.apache.samza.config.Config
 import eu.inn.samza.mesos.MesosConfig.Config2Mesos
 import org.apache.samza.config.TaskConfig.Config2Task
+import org.apache.samza.container.TaskNamesToSystemStreamPartitions
 import org.apache.samza.job.{CommandBuilder, ShellCommandBuilder}
 
 import scala.collection.JavaConversions._
@@ -35,14 +36,21 @@ class MesosTask(config: Config,
 
   def getMesosTaskName: String = "%s-task-%d" format(config.getName.get, samzaTaskId)
 
+  def getSamzaTaskName: String = "samza-task-%s" format samzaTaskId.toString
+
   def getMesosTaskId: String = getMesosTaskName
 
   def getSamzaCommandBuilder: CommandBuilder = {
+    val sspTaskNames: TaskNamesToSystemStreamPartitions = state.samzaTaskIDToSSPTaskNames
+      .getOrElse(samzaTaskId, TaskNamesToSystemStreamPartitions())
     val cmdBuilderClassName = config.getCommandClass.getOrElse(classOf[ShellCommandBuilder].getName)
     Class.forName(cmdBuilderClassName).newInstance.asInstanceOf[CommandBuilder]
       .setConfig(config)
-      .setId(samzaTaskId)
-      .setUrl(state.jobCoordinator.server.getUrl)
+      .setName(getSamzaTaskName)
+      .setTaskNameToSystemStreamPartitionsMapping(sspTaskNames.getJavaFriendlyType)
+      .setTaskNameToChangeLogPartitionMapping(
+        state.taskNameToChangeLogPartitionMapping.map(kv => kv._1 -> Integer.valueOf(kv._2))
+      )
   }
 
   def getBuiltMesosCommandInfoURI: CommandInfo.URI = {

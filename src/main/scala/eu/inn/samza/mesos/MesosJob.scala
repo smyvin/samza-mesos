@@ -68,13 +68,11 @@ class MesosJob(config: Config) extends StreamJob with Logging {
   }
 
   def kill: StreamJob = {
-    state.jobCoordinator.stop
     driver.stop
     this
   }
 
   def submit: StreamJob = {
-    state.jobCoordinator.start
     driver.run
     this
   }

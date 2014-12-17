@@ -86,6 +86,8 @@ class SamzaScheduler(config: Config,
 
     if (state.unclaimedTasks.nonEmpty)
       allocateResources(driver)
+    else
+      offers.foreach(o => driver.declineOffer(o.getId))
   }
 
   def offerRescinded(driver: SchedulerDriver, offer: OfferID): Unit = {

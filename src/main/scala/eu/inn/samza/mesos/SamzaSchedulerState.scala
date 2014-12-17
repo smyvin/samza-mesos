@@ -22,10 +22,10 @@ package eu.inn.samza.mesos
 import eu.inn.samza.mesos.MesosConfig.Config2Mesos
 import org.apache.mesos.Protos.{OfferID, Offer, TaskInfo}
 import org.apache.samza.config.Config
-import org.apache.samza.coordinator.JobCoordinator
+import org.apache.samza.container.{TaskName, TaskNamesToSystemStreamPartitions}
 import org.apache.samza.job.ApplicationStatus
 import org.apache.samza.job.ApplicationStatus._
-import org.apache.samza.util.Logging
+import org.apache.samza.util.{Logging, Util}
 
 import scala.collection.mutable
 import scala.collection.JavaConversions._
@@ -39,9 +39,13 @@ class SamzaSchedulerState(config: Config) extends Logging {
     1
   })
 
-  val jobCoordinator: JobCoordinator = JobCoordinator(config, initialTaskCount)
+  val initialSamzaTaskIDs = (0 until initialTaskCount).toSet
 
-  val initialSamzaTaskIDs = jobCoordinator.jobModel.getContainers.keySet.map(_.toInt).toSet
+  val samzaTaskIDToSSPTaskNames: Map[Int, TaskNamesToSystemStreamPartitions] =
+    Util.assignContainerToSSPTaskNames(config, initialTaskCount)
+
+  val taskNameToChangeLogPartitionMapping: Map[TaskName, Int] =
+    Util.getTaskNameToChangeLogPartitionMapping(config, samzaTaskIDToSSPTaskNames)
 
   val tasks: Map[String, MesosTask] = initialSamzaTaskIDs.map(id => {
     val task = new MesosTask(config, this, id)
