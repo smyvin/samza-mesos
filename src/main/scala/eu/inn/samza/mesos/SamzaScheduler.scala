@@ -61,7 +61,7 @@ class SamzaScheduler(config: Config,
   }
 
   private def allocateResources(driver: SchedulerDriver): Unit = {
-    info("Trying to allocate tasks using existing offers.")
+    // info("Trying to allocate tasks using existing offers.")
 
     offerMapper.mapResources(state.offerPool.values.toList, state.filterTasks(state.unclaimedTasks.toSeq))
       .foreach(kv => {
@@ -72,25 +72,31 @@ class SamzaScheduler(config: Config,
         debug("Resource constraints have not been satisfied by offer %s. Declining." format kv._1.getId.getValue)
         driver.declineOffer(kv._1.getId)
       } else {
-        info("Resource constraints have been satisfied by offer %s." format kv._1.getId.getValue)
+        info("Resource constraints have been satisfied by offer %s. Launching." format kv._1.getId.getValue)
         launch(driver, kv._1, kv._2)
       }
     })
   }
 
   def resourceOffers(driver: SchedulerDriver, offers: util.List[Offer]) {
+    debug(s"resourceOffers called with offers ${offers.map(_.getId.getValue)}")
 
     state.offerPool.keys.foreach(driver.declineOffer)
     state.offerPool.clear() // todo: not sure
     state.offerPool ++= offers.map(o => (o.getId, o))
 
-    if (state.unclaimedTasks.nonEmpty)
+    if (state.unclaimedTasks.nonEmpty) {
+      info(s"resourceOffers is trying to allocate resources for tasks ${state.unclaimedTasks}")
       allocateResources(driver)
-    else
+    }
+    else {
       offers.foreach(o => driver.declineOffer(o.getId))
+      state.offerPool.clear()
+    }
   }
 
   def offerRescinded(driver: SchedulerDriver, offer: OfferID): Unit = {
+    info(s"offerRescinded called with offer ${offer.getValue}")
     state.offerPool -= offer
   }
 
@@ -110,6 +116,7 @@ class SamzaScheduler(config: Config,
         state.unclaimedTasks += taskId
         state.pendingTasks -= taskId
         state.runningTasks -= taskId
+        info(s"statusUpdate is trying to allocate resources for tasks ${state.unclaimedTasks}")
         allocateResources(driver) // maybe we already have interesting offers
       case _ =>
     }
