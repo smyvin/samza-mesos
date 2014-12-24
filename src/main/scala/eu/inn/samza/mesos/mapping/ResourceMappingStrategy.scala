@@ -1,7 +1,7 @@
 package eu.inn.samza.mesos.mapping
 
 trait ResourceMappingStrategy {
-  def mapResources[R <% ResourceHolder, X](resourceHolders: List[R],
+  def mapResources[R <% ResourceHolder, X](resourceHolders: Iterable[R],
                                            objects: Set[X],
                                            constraints: ResourceConstraints): Map[R, Set[X]]
 

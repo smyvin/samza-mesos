@@ -65,7 +65,7 @@ class TaskOfferMapper(strategy: ResourceMappingStrategy) {
     this
   }
 
-  def mapResources(offers: List[Offer], tasks: Set[MesosTask]): Map[Offer, Set[MesosTask]] = {
+  def mapResources(offers: Iterable[Offer], tasks: Set[MesosTask]): Map[Offer, Set[MesosTask]] = {
     strategy.mapResources(offers, tasks, constraints)
   }
 }

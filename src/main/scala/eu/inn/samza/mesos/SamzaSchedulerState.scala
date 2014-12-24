@@ -30,41 +30,68 @@ import org.apache.samza.util.{Logging, Util}
 import scala.collection.mutable
 import scala.collection.JavaConversions._
 
-class SamzaSchedulerState(config: Config) extends Logging {
-  var currentStatus: ApplicationStatus = New
-  var isHealthy = false
+/*
+Let's be very clear about terminology:
+  - Samza task
+    - the instance of StreamTask that processes messages from a single stream partition
+    - Samza determines how many Samza tasks there are for the Samza job, and the assignment of Samza tasks to Samza containers
+  - Samza container
+    - the JVM process that contains 1 or more Samza tasks
+    - the number of Samza containers for the Samza job is configurable (mesos.executor.count), defaults to 1
+  - Samza job: 
+    - the high-level processing, actually carried out by individual Samza containers & Samza tasks
+    - a Samza job runs in Mesos as a Mesos framework, which schedules Mesos tasks (Samza containers) to run out in the Mesos cluster
+  - Mesos task
+    - 1 Samza container running on a Mesos slave machine
+    - Mesos task = Samza container
+    - So 1 Samza job = 1 or more Mesos tasks
+  - Mesos framework
+    - a Mesos scheduler that schedules Mesos tasks to run out in the Mesos cluster
+    - a Mesos executor that actually runs each Mesos task
+    - Mesos framework = Samza job
 
-  val initialTaskCount: Int = config.getTaskCount.getOrElse({
-    info("No %s specified. Defaulting to one container." format MesosConfig.EXECUTOR_TASK_COUNT)
+To summarize:
+  - Samza job = Mesos framework
+  - Samza container = Mesos task
+  - Samza task has no Mesos equivalent
+
+Note that both Mesos and Samza have a thing called "task", so need to qualify that term to avoid confusion
+*/
+
+class SamzaSchedulerState(config: Config) extends Logging {
+  var currentStatus: ApplicationStatus = New //TODO should this get updated to other values at some point? possible values are: New, Running, SuccessfulFinish, UnsuccessfulFinish
+
+  val samzaContainerCount: Int = config.getTaskCount.getOrElse({
+    info(s"No ${MesosConfig.EXECUTOR_TASK_COUNT} specified. Defaulting to one Samza container (i.e. one Mesos task).")
     1
   })
+  debug(s"Samza container (i.e. Mesos task) count: ${samzaContainerCount}")
 
-  val initialSamzaTaskIDs = (0 until initialTaskCount).toSet
+  val samzaContainerIds = (0 until samzaContainerCount).toSet
+  debug(s"Samza container IDs: ${samzaContainerIds}")
 
-  val samzaTaskIDToSSPTaskNames: Map[Int, TaskNamesToSystemStreamPartitions] =
-    Util.assignContainerToSSPTaskNames(config, initialTaskCount)
+  val samzaContainerIdToSSPTaskNames: Map[Int, TaskNamesToSystemStreamPartitions] =
+    Util.assignContainerToSSPTaskNames(config, samzaContainerCount)
+  debug(s"Samza container ID to SSP task names: ${samzaContainerIdToSSPTaskNames}")
 
-  val taskNameToChangeLogPartitionMapping: Map[TaskName, Int] =
-    Util.getTaskNameToChangeLogPartitionMapping(config, samzaTaskIDToSSPTaskNames)
+  val samzaTaskNameToChangeLogPartitionMapping: Map[TaskName, Int] =
+    Util.getTaskNameToChangeLogPartitionMapping(config, samzaContainerIdToSSPTaskNames)
+  debug(s"Samza task name to changelog partition mapping: ${samzaTaskNameToChangeLogPartitionMapping}")
 
-  val tasks: Map[String, MesosTask] = initialSamzaTaskIDs.map(id => {
-    val task = new MesosTask(config, this, id)
+  val mesosTasks: Map[String, MesosTask] = samzaContainerIds.map { containerId => 
+    val task = new MesosTask(config, this, containerId)
     (task.getMesosTaskId, task)
-  }).toMap
+  }.toMap
+  debug(s"Mesos task IDs: ${mesosTasks.keys}")
 
-  val preparedTasks: mutable.Map[String, TaskInfo] = mutable.Map()
-
-  val unclaimedTasks: mutable.Set[String] = mutable.Set(tasks.keys.toSeq: _*)
+  //TODO need task state transition methods here, and maybe don't expose these public mutable sets
+  val unclaimedTasks: mutable.Set[String] = mutable.Set(mesosTasks.keys.toSeq: _*)
   val pendingTasks: mutable.Set[String] = mutable.Set()
   val runningTasks: mutable.Set[String] = mutable.Set()
 
-  val offerPool: mutable.Map[OfferID, Offer] = mutable.Map()
-
-  def filterTasks(ids: Seq[String]): Set[MesosTask] =
-    tasks.filterKeys(ids.contains).map(_._2).toSet
+  def filterTasks(ids: Iterable[String]): Set[MesosTask] = mesosTasks.filterKeys(ids.contains).values.toSet
 
   def dump() = {
-    info("Tasks state: unclaimed: %d, pending: %d, running: %d"
-      format(unclaimedTasks.size, pendingTasks.size, runningTasks.size))
+    info(s"Tasks state: unclaimed: ${unclaimedTasks.size}, pending: ${pendingTasks.size}, running: ${runningTasks.size}")
   }
 }

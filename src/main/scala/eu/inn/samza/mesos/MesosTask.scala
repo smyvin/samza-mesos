@@ -34,22 +34,21 @@ class MesosTask(config: Config,
                 state: SamzaSchedulerState,
                 val samzaTaskId: Int) {
 
-  def getMesosTaskName: String = "%s-task-%d" format(config.getName.get, samzaTaskId)
+  def getMesosTaskName: String = "%s-task-%d" format(config.getName.get, samzaTaskId) //TODO needs to contain a UUID
 
-  def getSamzaTaskName: String = "samza-task-%s" format samzaTaskId.toString
+  def getSamzaTaskName: String = "samza-task-%s" format samzaTaskId.toString //TODO this is technically a Samza container, not a Samza task, needs a better name...
 
   def getMesosTaskId: String = getMesosTaskName
 
   def getSamzaCommandBuilder: CommandBuilder = {
-    val sspTaskNames: TaskNamesToSystemStreamPartitions = state.samzaTaskIDToSSPTaskNames
-      .getOrElse(samzaTaskId, TaskNamesToSystemStreamPartitions())
+    val sspTaskNames: TaskNamesToSystemStreamPartitions = state.samzaContainerIdToSSPTaskNames.getOrElse(samzaTaskId, TaskNamesToSystemStreamPartitions())
     val cmdBuilderClassName = config.getCommandClass.getOrElse(classOf[ShellCommandBuilder].getName)
     Class.forName(cmdBuilderClassName).newInstance.asInstanceOf[CommandBuilder]
       .setConfig(config)
       .setName(getSamzaTaskName)
       .setTaskNameToSystemStreamPartitionsMapping(sspTaskNames.getJavaFriendlyType)
       .setTaskNameToChangeLogPartitionMapping(
-        state.taskNameToChangeLogPartitionMapping.map(kv => kv._1 -> Integer.valueOf(kv._2))
+        state.samzaTaskNameToChangeLogPartitionMapping.map(kv => kv._1 -> Integer.valueOf(kv._2))
       )
   }
 
