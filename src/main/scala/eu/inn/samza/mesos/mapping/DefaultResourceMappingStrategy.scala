@@ -22,9 +22,9 @@ package eu.inn.samza.mesos.mapping
 import scala.collection.mutable
 
 class DefaultResourceMappingStrategy extends ResourceMappingStrategy {
-
-  def mapResources[R <% ResourceHolder, X](resourceHolders: List[R],
-                                           objects: Set[X],
+  //called like this in TaskOfferMapper: strategy.mapResources(offers, tasks, constraints)
+  def mapResources[R <% ResourceHolder, X](resourceHolders: Iterable[R], //offers
+                                           objects: Set[X],              //tasks
                                            constraints: ResourceConstraints): Map[R, Set[X]] = {
     val unallocated = mutable.Set(objects.toSeq: _*)
     val holdersMap = mutable.Map[R, Set[X]]()
