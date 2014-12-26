@@ -43,14 +43,13 @@ class SamzaScheduler(config: Config, state: SamzaSchedulerState, offerMapper: Ta
 
   def launch(driver: SchedulerDriver, offer: Offer, tasks: JSet[MesosTask]): Unit = {
     info(s"Assigning ${tasks.size()} Mesos tasks ${tasks.map(_.getMesosTaskId)} to offer ${offer.getId.getValue}.")
-    val preparedTasks = tasks.map(_.getBuiltMesosTaskInfo(offer.getSlaveId))
+    val preparedTasks = tasks.map(_.getBuiltMesosTaskInfo(offer.getSlaveId)).toSet
     val status = driver.launchTasks(Seq(offer.getId), preparedTasks)
 
     debug(s"Result of launching tasks ${tasks.map(_.getMesosTaskId)} is ${status}")
 
     if (status == Status.DRIVER_RUNNING) {
-      state.pendingTasks ++= preparedTasks.map(_.getTaskId.getValue) //TODO task state transitions should probably be encapsulated in SamzaSchedulerState methods
-      state.unclaimedTasks --= preparedTasks.map(_.getTaskId.getValue)
+      state.tasksAreNowPending(preparedTasks.map(_.getTaskId.getValue))
     }
     // todo: else what?
   }
@@ -58,9 +57,9 @@ class SamzaScheduler(config: Config, state: SamzaSchedulerState, offerMapper: Ta
   override def resourceOffers(driver: SchedulerDriver, offers: JList[Offer]) {
     debug(s"resourceOffers called with offers ${offers.map(_.getId.getValue)}")
 
-    if (state.unclaimedTasks.nonEmpty) {
-      info(s"resourceOffers is trying to allocate resources for Mesos tasks ${state.unclaimedTasks}")
-      offerMapper.mapResources(offers, state.filterTasks(state.unclaimedTasks)).foreach { case (offer, tasks) => 
+    if (state.hasUnclaimedTasks) {
+      info(s"resourceOffers is trying to allocate resources for Mesos tasks ${state.unclaimedTaskIds}")
+      offerMapper.mapResources(offers, state.unclaimedTasks).foreach { case (offer, tasks) => 
         if (tasks.isEmpty) {
           debug(s"Resource constraints have not been satisfied by offer ${offer.getId.getValue}. Declining.")
           driver.declineOffer(offer.getId)
@@ -69,37 +68,29 @@ class SamzaScheduler(config: Config, state: SamzaSchedulerState, offerMapper: Ta
           launch(driver, offer, tasks)
         }
       }
-    }
-    else {
+    } else {
       offers.foreach(o => driver.declineOffer(o.getId))
     }
   }
 
-  override def offerRescinded(driver: SchedulerDriver, offer: OfferID): Unit = {
-    info(s"offerRescinded called with offer ${offer.getValue}")
-  }
-
   override def statusUpdate(driver: SchedulerDriver, status: TaskStatus) {
+    import org.apache.mesos.Protos.TaskState._
+
     val taskId = status.getTaskId.getValue
 
     info(s"Mesos task ${taskId} is in state ${status.getState}")
 
     status.getState match {
-      case TaskState.TASK_RUNNING =>
-        state.pendingTasks -= taskId
-        state.runningTasks += taskId
-      case TaskState.TASK_FAILED |
-           TaskState.TASK_FINISHED |
-           TaskState.TASK_KILLED |
-           TaskState.TASK_LOST =>
-        state.unclaimedTasks += taskId //TODO task state transitions should probably be encapsulated in SamzaSchedulerState methods
-        state.pendingTasks -= taskId
-        state.runningTasks -= taskId
-        info(s"Mesos task ${taskId} is now unclaimed and needs to be re-scheduled")
+      case TASK_RUNNING => state.taskIsNowRunning(taskId)
+      case TASK_FAILED | TASK_FINISHED | TASK_KILLED | TASK_LOST => state.taskFailed(taskId)
       case _ =>
     }
 
     state.dump()
+  }
+
+  override def offerRescinded(driver: SchedulerDriver, offer: OfferID): Unit = {
+    info(s"offerRescinded called with offer ${offer.getValue}")
   }
 
   override def frameworkMessage(driver: SchedulerDriver, executor: ExecutorID, slave: SlaveID, data: Array[Byte]): Unit = {}

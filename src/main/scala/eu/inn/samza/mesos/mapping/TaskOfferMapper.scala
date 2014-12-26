@@ -41,7 +41,7 @@ class TaskOfferMapper(strategy: ResourceMappingStrategy) {
 
   private val constraints = new ResourceConstraints
 
-  // not sure if this is a good idea
+  // not sure if this is a good idea <======= TODO why are these even here?
   addCpuConstraint(1.0)
   addMemConstraint(1024.0)
 
