@@ -78,20 +78,56 @@ class SamzaSchedulerState(config: Config) extends Logging {
     Util.getTaskNameToChangeLogPartitionMapping(config, samzaContainerIdToSSPTaskNames)
   debug(s"Samza task name to changelog partition mapping: ${samzaTaskNameToChangeLogPartitionMapping}")
 
-  val mesosTasks: Map[String, MesosTask] = samzaContainerIds.map { containerId => 
+  def newMesosTaskMapping(containerId: Int): (String, MesosTask) = {
     val task = new MesosTask(config, this, containerId)
     (task.getMesosTaskId, task)
-  }.toMap
+  }
+  private[this] val mesosTasks: mutable.Map[String, MesosTask] = mutable.Map(samzaContainerIds.toSeq.map(newMesosTaskMapping): _*)
   debug(s"Mesos task IDs: ${mesosTasks.keys}")
 
-  //TODO need task state transition methods here, and maybe don't expose these public mutable sets
-  val unclaimedTasks: mutable.Set[String] = mutable.Set(mesosTasks.keys.toSeq: _*)
-  val pendingTasks: mutable.Set[String] = mutable.Set()
-  val runningTasks: mutable.Set[String] = mutable.Set()
+  private[this] val unclaimedTaskIdSet: mutable.Set[String] = mutable.Set(mesosTasks.keys.toSeq: _*)
+  private[this] val pendingTaskIdSet: mutable.Set[String] = mutable.Set()
+  private[this] val runningTaskIdSet: mutable.Set[String] = mutable.Set()
 
-  def filterTasks(ids: Iterable[String]): Set[MesosTask] = mesosTasks.filterKeys(ids.contains).values.toSet
+  def unclaimedTaskIds: Set[String] = unclaimedTaskIdSet.toSet
+  def pendingTaskIds: Set[String] = pendingTaskIdSet.toSet
+  def runningTaskIds: Set[String] = runningTaskIdSet.toSet
+
+  def unclaimedTasks: Set[MesosTask] = mesosTasks.filterKeys(unclaimedTaskIds).values.toSet
+  def hasUnclaimedTasks: Boolean = unclaimedTaskIdSet.nonEmpty
+
+  /** Unclaimed --> Pending */
+  def tasksAreNowPending(taskIds: Set[String]): Unit = {
+    unclaimedTaskIdSet --= taskIds
+    pendingTaskIdSet ++= taskIds
+  }
+
+  /** Pending --> Running */
+  def taskIsNowRunning(taskId: String): Unit = {
+    pendingTaskIdSet -= taskId
+    runningTaskIdSet += taskId
+  }
+
+  /** Running --> Unclaimed */
+  def taskFailed(taskId: String): Unit = {
+    //replace failed task with a copy that uses a new unique taskId
+    //we observed a problem when re-running a task with same ID where it would always die 1st time and have to be re-ran again
+    //also for the record, Marathon re-runs failed tasks with new unique IDs
+    for (task <- mesosTasks.get(taskId)) {
+      pendingTaskIdSet -= taskId
+      runningTaskIdSet -= taskId
+      unclaimedTaskIdSet -= taskId
+      mesosTasks -= taskId
+
+      val newTask = task.copyWithNewId
+      val newTaskId = newTask.getMesosTaskId
+      mesosTasks += (newTaskId -> newTask)
+      unclaimedTaskIdSet += newTaskId
+      info(s"Mesos task ${taskId} failed, was replaced with ${newTaskId} and will be re-scheduled")
+    }
+  }
 
   def dump() = {
-    info(s"Tasks state: unclaimed: ${unclaimedTasks.size}, pending: ${pendingTasks.size}, running: ${runningTasks.size}")
+    info(s"Tasks state: unclaimed: ${unclaimedTaskIdSet.size}, pending: ${pendingTaskIdSet.size}, running: ${runningTaskIdSet.size}")
   }
 }
