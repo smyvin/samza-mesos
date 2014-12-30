@@ -28,12 +28,13 @@ import eu.inn.samza.mesos.MesosConfig.Config2Mesos
 import org.apache.samza.config.TaskConfig.Config2Task
 import org.apache.samza.container.TaskNamesToSystemStreamPartitions
 import org.apache.samza.job.{CommandBuilder, ShellCommandBuilder}
+import org.apache.samza.util.Logging
 
 import scala.collection.JavaConversions._
 
 class MesosTask(config: Config,
                 state: SamzaSchedulerState,
-                val samzaContainerId: Int) {
+                val samzaContainerId: Int) extends Logging {
 
   /** When the returned task's ID is accessed, it will be created with a new UUID. */
   def copyWithNewId: MesosTask = new MesosTask(config, state, samzaContainerId)
@@ -66,15 +67,17 @@ class MesosTask(config: Config,
   }
 
   def getBuiltMesosEnvironment(envMap: JMap[String, String]): Environment = {
+    val memory = config.getExecutorMaxMemoryMb
+    val javaHeapOpts = ("JAVA_HEAP_OPTS" -> s"-Xms${memory}M -Xmx${memory}M")
     val mesosEnvironmentBuilder: Environment.Builder = Environment.newBuilder()
-    envMap foreach (kv => {
+    (envMap + javaHeapOpts) foreach { case (name, value) => 
       mesosEnvironmentBuilder.addVariables(
         Environment.Variable.newBuilder()
-          .setName(kv._1)
-          .setValue(kv._2)
+          .setName(name)
+          .setValue(value)
           .build()
       )
-    })
+    }
     mesosEnvironmentBuilder.build()
   }
 
