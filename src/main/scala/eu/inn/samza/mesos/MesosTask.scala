@@ -90,9 +90,18 @@ class MesosTask(config: Config,
   lazy val getBuiltMesosCommandInfo: CommandInfo = {
     val samzaCommandBuilder = getSamzaCommandBuilder
     CommandInfo.newBuilder()
-      .addUris(getBuiltMesosCommandInfoURI)
-      .setValue(samzaCommandBuilder.buildCommand())
+      // .addUris(getBuiltMesosCommandInfoURI)
+      .setValue("/samza/" + samzaCommandBuilder.buildCommand()) //should be bin/run-container.sh for .tgz and /samza/bin/run-container.sh for Docker container
       .setEnvironment(getBuiltMesosEnvironment(samzaCommandBuilder.buildEnvironment()))
+      .build()
+  }
+
+  lazy val getBuiltMesosContainerInfo: ContainerInfo = {
+    val image = config.getDockerImage.get
+    debug(s"Using Docker image $image")
+    ContainerInfo.newBuilder()
+      .setType(ContainerInfo.Type.DOCKER)
+      .setDocker(ContainerInfo.DockerInfo.newBuilder().setImage(image).build())
       .build()
   }
 
@@ -102,6 +111,8 @@ class MesosTask(config: Config,
       .setSlaveId(slaveId)
       .setName(getMesosTaskName)
       .setCommand(getBuiltMesosCommandInfo)
+      //TODO support Samza container either in .tgz (using mesos.package.path) or Docker container (using mesos.docker.image)
+      .setContainer(getBuiltMesosContainerInfo)
       .addResources(
         Resource.newBuilder
           .setName("cpus")
