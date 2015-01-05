@@ -44,6 +44,8 @@ class MesosTask(config: Config,
 
   lazy val getSamzaContainerName: String = s"${config.getName.get}-container-${samzaContainerId}"
 
+  //TODO the code below here could use some refactoring, especially related to the config.getPackagePath vs config.getDockerImage logic...
+
   lazy val getSamzaCommandBuilder: CommandBuilder = {
     val sspTaskNames: TaskNamesToSystemStreamPartitions = state.samzaContainerIdToSSPTaskNames.getOrElse(samzaContainerId, TaskNamesToSystemStreamPartitions())
     val cmdBuilderClassName = config.getCommandClass.getOrElse(classOf[ShellCommandBuilder].getName)
@@ -57,11 +59,8 @@ class MesosTask(config: Config,
   }
 
   lazy val getBuiltMesosCommandInfoURI: CommandInfo.URI = {
-    val packagePath = {
-      config.getPackagePath.get
-    }
     CommandInfo.URI.newBuilder()
-      .setValue(packagePath)
+      .setValue(config.getPackagePath.get)
       .setExtract(true)
       .build()
   }
@@ -89,11 +88,12 @@ class MesosTask(config: Config,
 
   lazy val getBuiltMesosCommandInfo: CommandInfo = {
     val samzaCommandBuilder = getSamzaCommandBuilder
-    CommandInfo.newBuilder()
-      // .addUris(getBuiltMesosCommandInfoURI)
-      .setValue("/samza/" + samzaCommandBuilder.buildCommand()) //should be bin/run-container.sh for .tgz and /samza/bin/run-container.sh for Docker container
+    val pathPrefix = if (config.getDockerImage.nonEmpty) "/samza/" else ""
+    val builder = CommandInfo.newBuilder()
+      .setValue(pathPrefix + samzaCommandBuilder.buildCommand())
       .setEnvironment(getBuiltMesosEnvironment(samzaCommandBuilder.buildEnvironment()))
-      .build()
+    config.getPackagePath.foreach(_ => builder.addUris(getBuiltMesosCommandInfoURI))
+    builder.build()
   }
 
   lazy val getBuiltMesosContainerInfo: ContainerInfo = {
@@ -105,14 +105,19 @@ class MesosTask(config: Config,
       .build()
   }
 
+  def setCommandAndMaybeContainer(builder: TaskInfo.Builder): TaskInfo.Builder = {
+    if (config.getPackagePath.isEmpty && config.getDockerImage.isEmpty)
+      throw new IllegalArgumentException(s"Either ${MesosConfig.PACKAGE_PATH} or ${MesosConfig.DOCKER_IMAGE} must be specified")
+    builder.setCommand(getBuiltMesosCommandInfo)
+    config.getDockerImage.foreach(_ => builder.setContainer(getBuiltMesosContainerInfo))
+    builder
+  }
+
   def getBuiltMesosTaskInfo(slaveId: SlaveID): TaskInfo = {
-    TaskInfo.newBuilder()
+    val builder = TaskInfo.newBuilder()
       .setTaskId(getBuiltMesosTaskID)
       .setSlaveId(slaveId)
       .setName(getMesosTaskName)
-      .setCommand(getBuiltMesosCommandInfo)
-      //TODO support Samza container either in .tgz (using mesos.package.path) or Docker container (using mesos.docker.image)
-      .setContainer(getBuiltMesosContainerInfo)
       .addResources(
         Resource.newBuilder
           .setName("cpus")
@@ -142,7 +147,8 @@ class MesosTask(config: Config,
               config.getExecutorMaxDiskMb
             )
           ).build()
-      ).build()
+      )
+      setCommandAndMaybeContainer(builder).build()
   }
 }
 
