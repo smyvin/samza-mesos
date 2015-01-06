@@ -80,7 +80,7 @@ class SamzaSchedulerState(config: Config) extends Logging {
 
   def newMesosTaskMapping(containerId: Int): (String, MesosTask) = {
     val task = new MesosTask(config, this, containerId)
-    (task.getMesosTaskId, task)
+    (task.mesosTaskId, task)
   }
   private[this] val mesosTasks: mutable.Map[String, MesosTask] = mutable.Map(samzaContainerIds.toSeq.map(newMesosTaskMapping): _*)
   debug(s"Mesos task IDs: ${mesosTasks.keys}")
@@ -120,7 +120,7 @@ class SamzaSchedulerState(config: Config) extends Logging {
       mesosTasks -= taskId
 
       val newTask = task.copyWithNewId
-      val newTaskId = newTask.getMesosTaskId
+      val newTaskId = newTask.mesosTaskId
       mesosTasks += (newTaskId -> newTask)
       unclaimedTaskIdSet += newTaskId
       info(s"Mesos task ${taskId} failed, was replaced with ${newTaskId} and will be re-scheduled")

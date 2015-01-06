@@ -42,11 +42,11 @@ class SamzaScheduler(config: Config, state: SamzaSchedulerState, offerMapper: Ta
   }
 
   def launch(driver: SchedulerDriver, offer: Offer, tasks: JSet[MesosTask]): Unit = {
-    info(s"Assigning ${tasks.size()} Mesos tasks ${tasks.map(_.getMesosTaskId)} to offer ${offer.getId.getValue}.")
+    info(s"Assigning ${tasks.size()} Mesos tasks ${tasks.map(_.mesosTaskId)} to offer ${offer.getId.getValue}.")
     val preparedTasks = tasks.map(_.getBuiltMesosTaskInfo(offer.getSlaveId)).toSet
     val status = driver.launchTasks(Seq(offer.getId), preparedTasks)
 
-    debug(s"Result of launching tasks ${tasks.map(_.getMesosTaskId)} is ${status}")
+    debug(s"Result of launching tasks ${tasks.map(_.mesosTaskId)} is ${status}")
 
     if (status == Status.DRIVER_RUNNING) {
       state.tasksAreNowPending(preparedTasks.map(_.getTaskId.getValue))
@@ -64,7 +64,7 @@ class SamzaScheduler(config: Config, state: SamzaSchedulerState, offerMapper: Ta
           debug(s"Resource constraints have not been satisfied by offer ${offer.getId.getValue}. Declining.")
           driver.declineOffer(offer.getId)
         } else {
-          info(s"Resource constraints for Mesos tasks ${tasks.map(_.getMesosTaskId)} have been satisfied by offer ${offer.getId.getValue}. Launching.")
+          info(s"Resource constraints for Mesos tasks ${tasks.map(_.mesosTaskId)} have been satisfied by offer ${offer.getId.getValue}. Launching.")
           launch(driver, offer, tasks)
         }
       }
