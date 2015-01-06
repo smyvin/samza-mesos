@@ -39,32 +39,26 @@ class MesosTask(config: Config,
   /** When the returned task's ID is accessed, it will be created with a new UUID. */
   def copyWithNewId: MesosTask = new MesosTask(config, state, samzaContainerId)
 
-  lazy val getMesosTaskId: String = s"${config.getName.get}-samza-container-${samzaContainerId}-${UUID.randomUUID.toString}"
-  lazy val getMesosTaskName: String = getMesosTaskId
+  lazy val mesosTaskId: String = s"${config.getName.get}-samza-container-${samzaContainerId}-${UUID.randomUUID.toString}"
+  lazy val mesosTaskName: String = mesosTaskId
 
-  lazy val getSamzaContainerName: String = s"${config.getName.get}-container-${samzaContainerId}"
+  lazy val samzaContainerName: String = s"${config.getName.get}-container-${samzaContainerId}"
+
+  //TODO the code below here could use some refactoring, especially related to the config.getPackagePath vs config.getDockerImage logic...
 
   lazy val getSamzaCommandBuilder: CommandBuilder = {
     val sspTaskNames: TaskNamesToSystemStreamPartitions = state.samzaContainerIdToSSPTaskNames.getOrElse(samzaContainerId, TaskNamesToSystemStreamPartitions())
     val cmdBuilderClassName = config.getCommandClass.getOrElse(classOf[ShellCommandBuilder].getName)
     Class.forName(cmdBuilderClassName).newInstance.asInstanceOf[CommandBuilder]
       .setConfig(config)
-      .setName(getSamzaContainerName)
+      .setName(samzaContainerName)
       .setTaskNameToSystemStreamPartitionsMapping(sspTaskNames.getJavaFriendlyType)
       .setTaskNameToChangeLogPartitionMapping(
         state.samzaTaskNameToChangeLogPartitionMapping.map(kv => kv._1 -> Integer.valueOf(kv._2))
       )
   }
 
-  lazy val getBuiltMesosCommandInfoURI: CommandInfo.URI = {
-    val packagePath = {
-      config.getPackagePath.get
-    }
-    CommandInfo.URI.newBuilder()
-      .setValue(packagePath)
-      .setExtract(true)
-      .build()
-  }
+  def commandInfoUri(packagePath: String): CommandInfo.URI = CommandInfo.URI.newBuilder().setValue(packagePath).setExtract(true).build()
 
   def getBuiltMesosEnvironment(envMap: JMap[String, String]): Environment = {
     val memory = config.getExecutorMaxMemoryMb
@@ -81,57 +75,46 @@ class MesosTask(config: Config,
     mesosEnvironmentBuilder.build()
   }
 
-  lazy val getBuiltMesosTaskID: TaskID = {
-    TaskID.newBuilder()
-      .setValue(getMesosTaskId)
-      .build()
-  }
+  lazy val getBuiltMesosTaskID: TaskID = TaskID.newBuilder().setValue(mesosTaskId).build()
 
   lazy val getBuiltMesosCommandInfo: CommandInfo = {
     val samzaCommandBuilder = getSamzaCommandBuilder
-    CommandInfo.newBuilder()
-      .addUris(getBuiltMesosCommandInfoURI)
-      .setValue(samzaCommandBuilder.buildCommand())
+    val pathPrefix = if (config.getDockerImage.nonEmpty) "/samza/" else ""
+    val builder = CommandInfo.newBuilder()
+      .setValue(pathPrefix + samzaCommandBuilder.buildCommand())
       .setEnvironment(getBuiltMesosEnvironment(samzaCommandBuilder.buildEnvironment()))
+    config.getPackagePath.foreach(p => builder.addUris(commandInfoUri(p)))
+    builder.build()
+  }
+
+  def containerInfo(image: String): ContainerInfo = {
+    debug(s"Using Docker image $image")
+    ContainerInfo.newBuilder()
+      .setType(ContainerInfo.Type.DOCKER)
+      .setDocker(ContainerInfo.DockerInfo.newBuilder().setImage(image).build())
       .build()
   }
 
+  def setCommandAndMaybeContainer(builder: TaskInfo.Builder): TaskInfo.Builder = {
+    if (config.getPackagePath.isEmpty && config.getDockerImage.isEmpty)
+      throw new IllegalArgumentException(s"Either ${MesosConfig.PACKAGE_PATH} or ${MesosConfig.DOCKER_IMAGE} must be specified")
+    builder.setCommand(getBuiltMesosCommandInfo)
+    config.getDockerImage.foreach(image => builder.setContainer(containerInfo(image)))
+    builder
+  }
+
+  def scalarResource(name: String, value: Int): Resource =
+    Resource.newBuilder.setName(name).setType(Value.Type.SCALAR).setScalar(Value.Scalar.newBuilder().setValue(value)).build()
+
   def getBuiltMesosTaskInfo(slaveId: SlaveID): TaskInfo = {
-    TaskInfo.newBuilder()
+    val builder = TaskInfo.newBuilder()
       .setTaskId(getBuiltMesosTaskID)
+      .setName(mesosTaskName)
       .setSlaveId(slaveId)
-      .setName(getMesosTaskName)
-      .setCommand(getBuiltMesosCommandInfo)
-      .addResources(
-        Resource.newBuilder
-          .setName("cpus")
-          .setType(Value.Type.SCALAR)
-          .setScalar(
-            Value.Scalar.newBuilder().setValue(
-              config.getExecutorMaxCpuCores
-            )
-          ).build()
-      )
-      .addResources(
-        Resource.newBuilder
-          .setName("mem")
-          .setType(Value.Type.SCALAR)
-          .setScalar(
-            Value.Scalar.newBuilder().setValue(
-              config.getExecutorMaxMemoryMb
-            )
-          ).build()
-      )
-      .addResources(
-        Resource.newBuilder
-          .setName("disk")
-          .setType(Value.Type.SCALAR)
-          .setScalar(
-            Value.Scalar.newBuilder().setValue(
-              config.getExecutorMaxDiskMb
-            )
-          ).build()
-      ).build()
+      .addResources(scalarResource("cpus", config.getExecutorMaxCpuCores))
+      .addResources(scalarResource("mem", config.getExecutorMaxMemoryMb))
+      .addResources(scalarResource("disk", config.getExecutorMaxDiskMb))
+    setCommandAndMaybeContainer(builder).build()
   }
 }
 

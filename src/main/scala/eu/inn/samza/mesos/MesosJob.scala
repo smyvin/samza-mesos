@@ -36,8 +36,8 @@ class MesosJob(config: Config) extends StreamJob with Logging {
   val frameworkInfo = getFrameworkInfo
   val offerMapper = createOfferMapper
   val scheduler = new SamzaScheduler(config, state, offerMapper)
-  val driver = new MesosSchedulerDriver(scheduler, frameworkInfo,
-    config.getMasterConnect.getOrElse("zk://localhost:2181/mesos"))
+  val driver = new MesosSchedulerDriver(scheduler, frameworkInfo, config.getMasterConnect.getOrElse(throw new NullPointerException("mesos.master.connect is not set!")/*"zk://localhost:2181/mesos"*/))
+  info("MesosSchedulerDriver created")
 
   def getStatus: ApplicationStatus = {
     state.currentStatus
