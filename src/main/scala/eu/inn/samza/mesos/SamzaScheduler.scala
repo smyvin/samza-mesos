@@ -19,7 +19,7 @@
 
 package eu.inn.samza.mesos
 
-import java.util
+import java.util.{List => JList, Set => JSet}
 
 import eu.inn.samza.mesos.mapping.TaskOfferMapper
 import org.apache.mesos.Protos._
@@ -29,115 +29,85 @@ import org.apache.samza.util.Logging
 
 import scala.collection.JavaConversions._
 
-class SamzaScheduler(config: Config,
-                     state: SamzaSchedulerState,
-                     offerMapper: TaskOfferMapper) extends Scheduler with Logging {
+class SamzaScheduler(config: Config, state: SamzaSchedulerState, offerMapper: TaskOfferMapper) extends Scheduler with Logging {
 
   info("Samza scheduler created.")
 
-  def registered(driver: SchedulerDriver, framework: FrameworkID, master: MasterInfo) {
+  override def registered(driver: SchedulerDriver, framework: FrameworkID, master: MasterInfo) {
     info("Samza framework registered")
   }
 
-  def reregistered(driver: SchedulerDriver, master: MasterInfo): Unit = {
+  override def reregistered(driver: SchedulerDriver, master: MasterInfo): Unit = {
     info("Samza framework re-registered")
   }
 
-  def launch(driver: SchedulerDriver, offer: Offer, tasks: util.Set[MesosTask]): Unit = {
-    info("Assigning %d tasks to offer %s." format(tasks.size(), offer.getId.getValue))
-    val preparedTasks = tasks map (_.getBuiltMesosTaskInfo(offer.getSlaveId))
+  def launch(driver: SchedulerDriver, offer: Offer, tasks: JSet[MesosTask]): Unit = {
+    info(s"Assigning ${tasks.size()} Mesos tasks ${tasks.map(_.mesosTaskId)} to offer ${offer.getId.getValue}.")
+    val preparedTasks = tasks.map(_.getBuiltMesosTaskInfo(offer.getSlaveId)).toSet
+    val status = driver.launchTasks(Seq(offer.getId), preparedTasks)
 
-    info("Launching Samza tasks on offer %s." format offer.getId.getValue)
-    val status = driver.launchTasks(offer.getId :: Nil, preparedTasks)
-
-    debug("Result of tasks launch is %s".format(status))
+    debug(s"Result of launching tasks ${tasks.map(_.mesosTaskId)} is ${status}")
 
     if (status == Status.DRIVER_RUNNING) {
-      state.preparedTasks ++= preparedTasks.map(p => (p.getTaskId.getValue, p)).toMap
-      state.pendingTasks ++= preparedTasks.map(_.getTaskId.getValue)
-      state.unclaimedTasks --= preparedTasks.map(_.getTaskId.getValue)
+      state.tasksAreNowPending(preparedTasks.map(_.getTaskId.getValue))
     }
     // todo: else what?
   }
 
-  private def allocateResources(driver: SchedulerDriver): Unit = {
-    info("Trying to allocate tasks using existing offers.")
+  override def resourceOffers(driver: SchedulerDriver, offers: JList[Offer]) {
+    debug(s"resourceOffers called with offers ${offers.map(_.getId.getValue)}")
 
-    offerMapper.mapResources(state.offerPool.values.toList, state.filterTasks(state.unclaimedTasks.toSeq))
-      .foreach(kv => {
-
-      state.offerPool -= kv._1.getId
-
-      if (kv._2.isEmpty) {
-        debug("Resource constraints have not been satisfied by offer %s. Declining." format kv._1.getId.getValue)
-        driver.declineOffer(kv._1.getId)
-      } else {
-        info("Resource constraints have been satisfied by offer %s." format kv._1.getId.getValue)
-        launch(driver, kv._1, kv._2)
+    if (state.hasUnclaimedTasks) {
+      info(s"resourceOffers is trying to allocate resources for Mesos tasks ${state.unclaimedTaskIds}")
+      offerMapper.mapResources(offers, state.unclaimedTasks).foreach { case (offer, tasks) => 
+        if (tasks.isEmpty) {
+          debug(s"Resource constraints have not been satisfied by offer ${offer.getId.getValue}. Declining.")
+          driver.declineOffer(offer.getId)
+        } else {
+          info(s"Resource constraints for Mesos tasks ${tasks.map(_.mesosTaskId)} have been satisfied by offer ${offer.getId.getValue}. Launching.")
+          launch(driver, offer, tasks)
+        }
       }
-    })
-  }
-
-  def resourceOffers(driver: SchedulerDriver, offers: util.List[Offer]) {
-
-    state.offerPool.keys.foreach(driver.declineOffer)
-    state.offerPool.clear() // todo: not sure
-    state.offerPool ++= offers.map(o => (o.getId, o))
-
-    if (state.unclaimedTasks.nonEmpty)
-      allocateResources(driver)
-  }
-
-  def offerRescinded(driver: SchedulerDriver, offer: OfferID): Unit = {
-    state.offerPool -= offer
+    } else {
+      offers.foreach(o => driver.declineOffer(o.getId))
+    }
   }
 
   override def statusUpdate(driver: SchedulerDriver, status: TaskStatus) {
+    import org.apache.mesos.Protos.TaskState._
+
     val taskId = status.getTaskId.getValue
 
-    info("Task [%s] is in state [%s]" format(taskId, status.getState))
+    info(s"Mesos task ${taskId} is in state ${status.getState}")
 
     status.getState match {
-      case TaskState.TASK_RUNNING =>
-        state.pendingTasks -= taskId
-        state.runningTasks += taskId
-      case TaskState.TASK_FAILED
-           | TaskState.TASK_FINISHED
-           | TaskState.TASK_KILLED
-           | TaskState.TASK_LOST =>
-        state.unclaimedTasks += taskId
-        state.pendingTasks -= taskId
-        state.runningTasks -= taskId
-        allocateResources(driver) // maybe we already have interesting offers
+      case TASK_RUNNING => state.taskIsNowRunning(taskId)
+      case TASK_FAILED | TASK_FINISHED | TASK_KILLED | TASK_LOST => state.taskFailed(taskId)
       case _ =>
     }
 
-    state.isHealthy = state.runningTasks.size == state.initialTaskCount
     state.dump()
   }
 
-  def frameworkMessage(driver: SchedulerDriver,
-                       executor: ExecutorID,
-                       slave: SlaveID,
-                       data: Array[Byte]): Unit = {
+  override def offerRescinded(driver: SchedulerDriver, offer: OfferID): Unit = {
+    info(s"offerRescinded called with offer ${offer.getValue}")
   }
 
-  def disconnected(driver: SchedulerDriver): Unit = {
+  override def frameworkMessage(driver: SchedulerDriver, executor: ExecutorID, slave: SlaveID, data: Array[Byte]): Unit = {}
+
+  override def disconnected(driver: SchedulerDriver): Unit = {
     info("Framework has been disconnected")
   }
 
-  def slaveLost(driver: SchedulerDriver, slave: SlaveID): Unit = {
-    info("A slave %s has been lost" format slave.getValue)
+  override def slaveLost(driver: SchedulerDriver, slave: SlaveID): Unit = {
+    info(s"A slave ${slave.getValue} has been lost")
   }
 
-  def executorLost(driver: SchedulerDriver,
-                   executor: ExecutorID,
-                   slave: SlaveID,
-                   status: Int): Unit = {
-    info("An executor %s on slave %s has been lost." format(executor.getValue, slave.getValue))
+  override def executorLost(driver: SchedulerDriver, executor: ExecutorID, slave: SlaveID, status: Int): Unit = {
+    info(s"An executor ${executor.getValue} on slave ${slave.getValue} has been lost.")
   }
 
-  def error(driver: SchedulerDriver, error: String) {
-    info("Error reported: %s" format error)
+  override def error(driver: SchedulerDriver, error: String) {
+    info(s"Error reported: ${error}")
   }
 }

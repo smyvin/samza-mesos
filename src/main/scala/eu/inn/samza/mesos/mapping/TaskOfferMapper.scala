@@ -41,7 +41,7 @@ class TaskOfferMapper(strategy: ResourceMappingStrategy) {
 
   private val constraints = new ResourceConstraints
 
-  // not sure if this is a good idea
+  // not sure if this is a good idea <======= TODO why are these even here?
   addCpuConstraint(1.0)
   addMemConstraint(1024.0)
 
@@ -65,7 +65,7 @@ class TaskOfferMapper(strategy: ResourceMappingStrategy) {
     this
   }
 
-  def mapResources(offers: List[Offer], tasks: Set[MesosTask]): Map[Offer, Set[MesosTask]] = {
+  def mapResources(offers: Iterable[Offer], tasks: Set[MesosTask]): Map[Offer, Set[MesosTask]] = {
     strategy.mapResources(offers, tasks, constraints)
   }
 }
