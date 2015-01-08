@@ -25,6 +25,7 @@ import scala.collection.JavaConversions._
 object MesosConfig {
   val PACKAGE_PATH = "mesos.package.path"
   val DOCKER_IMAGE = "mesos.docker.image"
+  val DOCKER_ENTRYPOINT_ARGUMENTS = "mesos.docker.entrypoint.arguments"
   val MASTER_CONNECT = "mesos.master.connect"
 
   val EXECUTOR_MAX_MEMORY_MB = "mesos.executor.memory.mb"
@@ -55,6 +56,8 @@ class MesosConfig(config: Config) extends JobConfig(config) {
   def getPackagePath = getOption(MesosConfig.PACKAGE_PATH)
 
   def getDockerImage = getOption(MesosConfig.DOCKER_IMAGE)
+
+  def getDockerEntrypointArguments = getList(MesosConfig.DOCKER_ENTRYPOINT_ARGUMENTS, Nil)
 
   def getTaskCount: Option[Int] = getOption(MesosConfig.EXECUTOR_TASK_COUNT).map(_.toInt)
 
