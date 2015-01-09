@@ -79,10 +79,17 @@ class MesosTask(config: Config,
 
   lazy val getBuiltMesosCommandInfo: CommandInfo = {
     val samzaCommandBuilder = getSamzaCommandBuilder
-    val pathPrefix = if (config.getDockerImage.nonEmpty) "/samza/" else ""
     val builder = CommandInfo.newBuilder()
-      .setValue(pathPrefix + samzaCommandBuilder.buildCommand())
       .setEnvironment(getBuiltMesosEnvironment(samzaCommandBuilder.buildEnvironment()))
+    if (config.getDockerEntrypointArguments.nonEmpty) {
+      builder.setShell(false).addAllArguments(config.getDockerEntrypointArguments)
+      debug(s"Using Docker ENTRYPOINT arguments: ${config.getDockerEntrypointArguments.mkString(",")}")
+    } else {
+      val pathPrefix = if (config.getDockerImage.nonEmpty) "/samza/" else ""
+      val command = pathPrefix + samzaCommandBuilder.buildCommand()
+      debug(s"Using command: $command")
+      builder.setShell(true).setValue(command)
+    }
     config.getPackagePath.foreach(p => builder.addUris(commandInfoUri(p)))
     builder.build()
   }
