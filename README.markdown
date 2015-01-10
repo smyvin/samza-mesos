@@ -63,7 +63,7 @@ curl -X POST -H "Content-Type: application/json" -d my-job.json http://mymaratho
 
 ###Samza jobs in Docker
 
-You can also package your Samza jobs in a Docker image, instead of a tarball. The Docker image should have a root `/samza` directory, containing the same `bin`, `config` and `lib` directories as the tarball. In the Samza job config, use `mesos.docker.image` instead of `mesos.package.path`.
+You can also package your Samza jobs in a Docker image, instead of a tarball. The Docker image should have a root `/samza` directory, containing the same `bin`, `config` and `lib` directories as the tarball. Building this Docker image is as simple as building the tarball and then adding it to the image at /samza. In the Samza job config, use `mesos.docker.image` instead of `mesos.package.path`.
 
 Example JSON to submit to Marathon to run a Samza job in a Docker container may look like this:
 
@@ -86,6 +86,8 @@ Example JSON to submit to Marathon to run a Samza job in a Docker container may 
 }
 ```
 
+If your Docker image does not use the standard Samza run-job.sh and run-container.sh startup scripts, but instead uses its own ENTRYPOINT to run either the Samza framework or the Samza container, then you can use the `mesos.docker.entrypoint.arguments` config option.
+
 ##Configuration reference
 
 | Property                           | Required? | Default value             | Description                               |
@@ -93,6 +95,7 @@ Example JSON to submit to Marathon to run a Samza job in a Docker container may 
 | mesos.master.connect               | yes       |                           | Mesos master URL                          |
 | mesos.package.path                 | yes*      |                           | Job package URI (file, http, hdfs)        |
 | mesos.docker.image                 | yes*      |                           | Docker image (registry/my-jobs:latest)    |
+| mesos.docker.entrypoint.arguments  |           |                           | Arguments for Docker image ENTRYPOINT     |
 | mesos.executor.count               |           | 1                         | Number of Samza containers to run job in  |
 | mesos.executor.memory.mb           |           | 1024                      | Mesos task memory constraint              |
 | mesos.executor.cpu.cores           |           | 1                         | Mesos task CPU cores constraint           |
