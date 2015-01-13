@@ -39,8 +39,15 @@ class MesosJob(config: Config) extends StreamJob with Logging {
   val driver = new MesosSchedulerDriver(scheduler, frameworkInfo, config.getMasterConnect.getOrElse(throw new NullPointerException("mesos.master.connect is not set!")/*"zk://localhost:2181/mesos"*/))
   info("MesosSchedulerDriver created")
 
+  sys.addShutdownHook {
+    info("shutting down mesos job in shutdown hook...")
+    kill
+    waitForFinish(5000)
+    info("shutdown hook finished")
+  }
+
   def getStatus: ApplicationStatus = {
-    state.currentStatus
+    state.currentStatus //TODO this field is never updated...
   }
 
   def getFrameworkInfo: FrameworkInfo = {
@@ -72,8 +79,9 @@ class MesosJob(config: Config) extends StreamJob with Logging {
     this
   }
 
+  //Samza calls this method to start the job
   def submit: StreamJob = {
-    driver.run
+    driver.run //this blocks until the MesosSchedulerDriver is stopped in the kill method (i.e. the entire time this framework is running)
     this
   }
 
