@@ -75,16 +75,20 @@ class MesosJob(config: Config) extends StreamJob with Logging {
   }
 
   def kill: StreamJob = {
-    driver.stop
+    //Mesos stops all of this framework's tasks and completely removes this framework, then the call to run below finally returns
+    //although I think if we do driver.stop(true) then Mesos will not stop the tasks; we'd have to explicitly stop them here, probably using driver.killTask(taskId)
+    //the boolean param for stop() is failover - this allows the framework's tasks to keep running, then when the framework restarts it should use same frameworkId as the previous one
+    driver.stop()
     this
   }
 
   //Samza calls this method to start the job
   def submit: StreamJob = {
-    driver.run //this blocks until the MesosSchedulerDriver is stopped in the kill method (i.e. the entire time this framework is running)
+    driver.run() //this blocks until the MesosSchedulerDriver is stopped in the kill method (i.e. the entire time this framework is running)
     this
   }
 
+  //TODO I don't think either waitForFinish or waitForStatus work properly, since getStatus always returns New; they just always timeout
   def waitForFinish(timeoutMs: Long): ApplicationStatus = {
     val startTimeMs = System.currentTimeMillis()
 
