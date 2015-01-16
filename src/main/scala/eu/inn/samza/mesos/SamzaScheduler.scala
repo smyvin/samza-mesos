@@ -33,8 +33,8 @@ class SamzaScheduler(config: Config, state: SamzaSchedulerState, offerMapper: Ta
 
   info("Samza scheduler created.")
 
-  override def registered(driver: SchedulerDriver, framework: FrameworkID, master: MasterInfo) {
-    info("Samza framework registered")
+  override def registered(driver: SchedulerDriver, frameworkId: FrameworkID, master: MasterInfo) {
+    info(s"Samza framework registered with ID ${frameworkId.getValue}")
   }
 
   override def reregistered(driver: SchedulerDriver, master: MasterInfo): Unit = {
