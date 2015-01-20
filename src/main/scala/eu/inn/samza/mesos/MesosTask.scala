@@ -111,7 +111,7 @@ class MesosTask(config: Config,
   }
 
   def scalarResource(name: String, value: Int): Resource =
-    Resource.newBuilder.setName(name).setType(Value.Type.SCALAR).setScalar(Value.Scalar.newBuilder().setValue(value)).build()
+    Resource.newBuilder.setName(name).setType(Value.Type.SCALAR).setScalar(Value.Scalar.newBuilder().setValue(value.toDouble)).build()
 
   def getBuiltMesosTaskInfo(slaveId: SlaveID): TaskInfo = {
     val builder = TaskInfo.newBuilder()

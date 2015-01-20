@@ -60,7 +60,7 @@ class MesosJob(config: Config) extends StreamJob with Logging {
       .setName(frameworkName)
       .setId(frameworkId)
       .setUser(config.getUser)
-      .setFailoverTimeout(config.getFailoverTimeout)
+      .setFailoverTimeout(config.getFailoverTimeout.toDouble)
 
     config.getRole.foreach(infoBuilder.setRole)
 
@@ -69,8 +69,8 @@ class MesosJob(config: Config) extends StreamJob with Logging {
 
   def createOfferMapper: TaskOfferMapper = {
     new TaskOfferMapper(new DefaultResourceMappingStrategy)
-      .addCpuConstraint(config.getExecutorMaxCpuCores)
-      .addMemConstraint(config.getExecutorMaxMemoryMb)
+      .addCpuConstraint(config.getExecutorMaxCpuCores.toDouble)
+      .addMemConstraint(config.getExecutorMaxMemoryMb.toDouble)
       .addAttributeConstraint(config.getExecutorAttributes.toSeq: _*)
   }
 
