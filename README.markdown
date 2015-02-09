@@ -63,7 +63,7 @@ curl -X POST -H "Content-Type: application/json" -d my-job.json http://mymaratho
 
 ###Samza jobs in Docker
 
-You can also package your Samza jobs in a Docker image, instead of a tarball. The Docker image should have a root `/samza` directory, containing the same `bin`, `config` and `lib` directories as the tarball. Building this Docker image is as simple as building the tarball and then adding it to the image at /samza. In the Samza job config, use `mesos.docker.image` instead of `mesos.package.path`.
+You can also package your Samza jobs in a Docker image, instead of a tarball. The Docker image should have a root `/samza` directory, containing the same `bin`, `config` and `lib` directories as the tarball. Building this Docker image is as simple as building the tarball and then adding it to the image at /samza. In the Samza job config, use `mesos.docker.image` instead of `mesos.package.path`. [banno/samza-mesos](https://registry.hub.docker.com/u/banno/samza-mesos/) provides a convenient base Docker image for you to build your Samza job's Docker image on.
 
 Example JSON to submit to Marathon to run a Samza job in a Docker container may look like this:
 
