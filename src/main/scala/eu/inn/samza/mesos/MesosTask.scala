@@ -64,7 +64,7 @@ class MesosTask(config: Config,
     val memory = config.getExecutorMaxMemoryMb
     val javaHeapOpts = ("JAVA_HEAP_OPTS" -> s"-Xms${memory}M -Xmx${memory}M")
     val mesosEnvironmentBuilder: Environment.Builder = Environment.newBuilder()
-    (envMap + javaHeapOpts) foreach { case (name, value) => 
+    (envMap + javaHeapOpts) foreach { case (name, value) =>
       mesosEnvironmentBuilder.addVariables(
         Environment.Variable.newBuilder()
           .setName(name)
@@ -110,8 +110,8 @@ class MesosTask(config: Config,
     builder
   }
 
-  def scalarResource(name: String, value: Int): Resource =
-    Resource.newBuilder.setName(name).setType(Value.Type.SCALAR).setScalar(Value.Scalar.newBuilder().setValue(value.toDouble)).build()
+  def scalarResource(name: String, value: Double): Resource =
+    Resource.newBuilder.setName(name).setType(Value.Type.SCALAR).setScalar(Value.Scalar.newBuilder().setValue(value)).build()
 
   def getBuiltMesosTaskInfo(slaveId: SlaveID): TaskInfo = {
     val builder = TaskInfo.newBuilder()
@@ -124,4 +124,3 @@ class MesosTask(config: Config,
     setCommandAndMaybeContainer(builder).build()
   }
 }
-
