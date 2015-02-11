@@ -69,8 +69,8 @@ class MesosJob(config: Config) extends StreamJob with Logging {
 
   def createOfferMapper: TaskOfferMapper = {
     new TaskOfferMapper(new DefaultResourceMappingStrategy)
-      .addCpuConstraint(config.getExecutorMaxCpuCores.toDouble)
-      .addMemConstraint(config.getExecutorMaxMemoryMb.toDouble)
+      .addCpuConstraint(config.getExecutorMaxCpuCores)
+      .addMemConstraint(config.getExecutorMaxMemoryMb)
       .addAttributeConstraint(config.getExecutorAttributes.toSeq: _*)
   }
 
