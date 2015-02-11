@@ -60,11 +60,14 @@ class MesosTask(config: Config,
 
   def commandInfoUri(packagePath: String): CommandInfo.URI = CommandInfo.URI.newBuilder().setValue(packagePath).setExtract(true).build()
 
+  val samzaContainerEnvVarPrefix = "SAMZA_CONTAINER_ENV_"
+
   def getBuiltMesosEnvironment(envMap: JMap[String, String]): Environment = {
     val memory = config.getExecutorMaxMemoryMb
     val javaHeapOpts = ("JAVA_HEAP_OPTS" -> s"-Xms${memory}M -Xmx${memory}M")
+    val samzaContainerEnvVars = scala.sys.env.filter(_._1 startsWith samzaContainerEnvVarPrefix).map { case (key, value) => (key.replaceAll(samzaContainerEnvVarPrefix, ""), value) }
     val mesosEnvironmentBuilder: Environment.Builder = Environment.newBuilder()
-    (envMap + javaHeapOpts) foreach { case (name, value) => 
+    (envMap + javaHeapOpts ++ samzaContainerEnvVars) foreach { case (name, value) => 
       mesosEnvironmentBuilder.addVariables(
         Environment.Variable.newBuilder()
           .setName(name)
@@ -81,6 +84,7 @@ class MesosTask(config: Config,
     val samzaCommandBuilder = getSamzaCommandBuilder
     val builder = CommandInfo.newBuilder()
       .setEnvironment(getBuiltMesosEnvironment(samzaCommandBuilder.buildEnvironment()))
+    info(s"Docker entrypoint arguments: ${config.getDockerEntrypointArguments}")
     if (config.getDockerEntrypointArguments.nonEmpty) {
       builder.setShell(false).addAllArguments(config.getDockerEntrypointArguments)
       debug(s"Using Docker ENTRYPOINT arguments: ${config.getDockerEntrypointArguments.mkString(",")}")
