@@ -45,21 +45,11 @@ class MesosTask(config: Config,
   //TODO the code below here could use some refactoring, especially related to the config.getPackagePath vs config.getDockerImage logic...
   lazy val getSamzaCommandBuilder: CommandBuilder = {
 
-    // val sspTaskNames: TaskNamesToSystemStreamPartitions = state.samzaContainerIdToSSPTaskNames.getOrElse(samzaContainerId, TaskNamesToSystemStreamPartitions())
-
     val cmdBuilderClassName = config.getCommandClass.getOrElse(classOf[ShellCommandBuilder].getName)
-    Class.forName(cmdBuilderClassName).newInstance.asInstanceOf[CommandBuilder]  // can have url id config
+    Class.forName(cmdBuilderClassName).newInstance.asInstanceOf[CommandBuilder]
       .setConfig(config)
       .setId(samzaContainerId)
       .setUrl(state.jobCoordinator.server.getUrl)
-
-
-      // these arent handled by the CommandBuilder anymore
-      // .setName(samzaContainerName)
-      // .setTaskNameToSystemStreamPartitionsMapping(sspTaskNames.getJavaFriendlyType)
-      // .setTaskNameToChangeLogPartitionMapping(
-      //   state.samzaTaskNameToChangeLogPartitionMapping.map(kv => kv._1 -> Integer.valueOf(kv._2))
-      // )
   }
 
   def commandInfoUri(packagePath: String): CommandInfo.URI = CommandInfo.URI.newBuilder().setValue(packagePath).setExtract(true).build()
