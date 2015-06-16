@@ -5,7 +5,7 @@ name := "samza-mesos"
 BannoSettings.settings
 
 libraryDependencies ++= {
-  val samzaVersion = "0.8.0"
+  val samzaVersion = "0.9.0"
   val mesosVersion = "0.21.0"
   Seq(
     "org.apache.samza" % "samza-api" % samzaVersion,

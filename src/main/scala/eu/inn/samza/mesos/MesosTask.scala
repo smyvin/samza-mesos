@@ -26,7 +26,7 @@ import org.apache.mesos.Protos._
 import org.apache.samza.config.Config
 import eu.inn.samza.mesos.MesosConfig.Config2Mesos
 import org.apache.samza.config.TaskConfig.Config2Task
-import org.apache.samza.container.TaskNamesToSystemStreamPartitions
+
 import org.apache.samza.job.{CommandBuilder, ShellCommandBuilder}
 import org.apache.samza.util.Logging
 
@@ -42,20 +42,24 @@ class MesosTask(config: Config,
   lazy val mesosTaskId: String = s"${config.getName.get}-samza-container-${samzaContainerId}-${UUID.randomUUID.toString}"
   lazy val mesosTaskName: String = mesosTaskId
 
-  lazy val samzaContainerName: String = s"${config.getName.get}-container-${samzaContainerId}"
-
   //TODO the code below here could use some refactoring, especially related to the config.getPackagePath vs config.getDockerImage logic...
-
   lazy val getSamzaCommandBuilder: CommandBuilder = {
-    val sspTaskNames: TaskNamesToSystemStreamPartitions = state.samzaContainerIdToSSPTaskNames.getOrElse(samzaContainerId, TaskNamesToSystemStreamPartitions())
+
+    // val sspTaskNames: TaskNamesToSystemStreamPartitions = state.samzaContainerIdToSSPTaskNames.getOrElse(samzaContainerId, TaskNamesToSystemStreamPartitions())
+
     val cmdBuilderClassName = config.getCommandClass.getOrElse(classOf[ShellCommandBuilder].getName)
-    Class.forName(cmdBuilderClassName).newInstance.asInstanceOf[CommandBuilder]
+    Class.forName(cmdBuilderClassName).newInstance.asInstanceOf[CommandBuilder]  // can have url id config
       .setConfig(config)
-      .setName(samzaContainerName)
-      .setTaskNameToSystemStreamPartitionsMapping(sspTaskNames.getJavaFriendlyType)
-      .setTaskNameToChangeLogPartitionMapping(
-        state.samzaTaskNameToChangeLogPartitionMapping.map(kv => kv._1 -> Integer.valueOf(kv._2))
-      )
+      .setId(samzaContainerId)
+      .setUrl(state.jobCoordinator.server.getUrl)
+
+
+      // these arent handled by the CommandBuilder anymore
+      // .setName(samzaContainerName)
+      // .setTaskNameToSystemStreamPartitionsMapping(sspTaskNames.getJavaFriendlyType)
+      // .setTaskNameToChangeLogPartitionMapping(
+      //   state.samzaTaskNameToChangeLogPartitionMapping.map(kv => kv._1 -> Integer.valueOf(kv._2))
+      // )
   }
 
   def commandInfoUri(packagePath: String): CommandInfo.URI = CommandInfo.URI.newBuilder().setValue(packagePath).setExtract(true).build()

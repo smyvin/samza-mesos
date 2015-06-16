@@ -22,11 +22,11 @@ package eu.inn.samza.mesos
 import eu.inn.samza.mesos.MesosConfig.Config2Mesos
 import org.apache.mesos.Protos.{OfferID, Offer, TaskInfo}
 import org.apache.samza.config.Config
-import org.apache.samza.container.{TaskName, TaskNamesToSystemStreamPartitions}
+import org.apache.samza.container.TaskName
 import org.apache.samza.job.ApplicationStatus
 import org.apache.samza.job.ApplicationStatus._
 import org.apache.samza.util.{Logging, Util}
-
+import org.apache.samza.coordinator.JobCoordinator
 import scala.collection.mutable
 import scala.collection.JavaConversions._
 
@@ -38,7 +38,7 @@ Let's be very clear about terminology:
   - Samza container
     - the JVM process that contains 1 or more Samza tasks
     - the number of Samza containers for the Samza job is configurable (mesos.executor.count), defaults to 1
-  - Samza job: 
+  - Samza job:
     - the high-level processing, actually carried out by individual Samza containers & Samza tasks
     - a Samza job runs in Mesos as a Mesos framework, which schedules Mesos tasks (Samza containers) to run out in the Mesos cluster
   - Mesos task
@@ -61,22 +61,26 @@ Note that both Mesos and Samza have a thing called "task", so need to qualify th
 class SamzaSchedulerState(config: Config) extends Logging {
   var currentStatus: ApplicationStatus = New //TODO should this get updated to other values at some point? possible values are: New, Running, SuccessfulFinish, UnsuccessfulFinish
 
+
+
   val samzaContainerCount: Int = config.getTaskCount.getOrElse({
     info(s"No ${MesosConfig.EXECUTOR_TASK_COUNT} specified. Defaulting to one Samza container (i.e. one Mesos task).")
     1
   })
   debug(s"Samza container (i.e. Mesos task) count: ${samzaContainerCount}")
 
+  val jobCoordinator = JobCoordinator(config, samzaContainerCount)
+
   val samzaContainerIds = (0 until samzaContainerCount).toSet
   debug(s"Samza container IDs: ${samzaContainerIds}")
 
-  val samzaContainerIdToSSPTaskNames: Map[Int, TaskNamesToSystemStreamPartitions] =
-    Util.assignContainerToSSPTaskNames(config, samzaContainerCount)
-  debug(s"Samza container ID to SSP task names: ${samzaContainerIdToSSPTaskNames}")
+  // val samzaContainerIdToSSPTaskNames: Map[Int, TaskNamesToSystemStreamPartitions] =
+  //   Util.assignContainerToSSPTaskNames(config, samzaContainerCount)
+  // debug(s"Samza container ID to SSP task names: ${samzaContainerIdToSSPTaskNames}")
 
-  val samzaTaskNameToChangeLogPartitionMapping: Map[TaskName, Int] =
-    Util.getTaskNameToChangeLogPartitionMapping(config, samzaContainerIdToSSPTaskNames)
-  debug(s"Samza task name to changelog partition mapping: ${samzaTaskNameToChangeLogPartitionMapping}")
+  // val samzaTaskNameToChangeLogPartitionMapping: Map[TaskName, Int] =
+  //   Util.getTaskNameToChangeLogPartitionMapping(config, samzaContainerIdToSSPTaskNames)
+  // debug(s"Samza task name to changelog partition mapping: ${samzaTaskNameToChangeLogPartitionMapping}")
 
   def newMesosTaskMapping(containerId: Int): (String, MesosTask) = {
     val task = new MesosTask(config, this, containerId)
