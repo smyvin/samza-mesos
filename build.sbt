@@ -4,12 +4,11 @@ name := "samza-mesos"
 
 BannoSettings.settings
 
+Samza.core
+
 libraryDependencies ++= {
-  val samzaVersion = "0.8.0"
   val mesosVersion = "0.21.0"
   Seq(
-    "org.apache.samza" % "samza-api" % samzaVersion,
-    "org.apache.samza" %% "samza-core" % samzaVersion,
     "org.apache.mesos" % "mesos" % mesosVersion,
     "org.scalatest" %% "scalatest" % "2.2.2" % "test"
   )
