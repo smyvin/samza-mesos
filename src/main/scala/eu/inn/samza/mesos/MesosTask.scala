@@ -51,11 +51,8 @@ class MesosTask(config: Config,
     val cmdBuilderClassName = config.getCommandClass.getOrElse(classOf[ShellCommandBuilder].getName)
     Class.forName(cmdBuilderClassName).newInstance.asInstanceOf[CommandBuilder]
       .setConfig(config)
-      .setName(samzaContainerName)
-      .setTaskNameToSystemStreamPartitionsMapping(sspTaskNames.getJavaFriendlyType)
-      .setTaskNameToChangeLogPartitionMapping(
-        state.samzaTaskNameToChangeLogPartitionMapping.map(kv => kv._1 -> Integer.valueOf(kv._2))
-      )
+      .setId(samzaTaskId)
+      .setUrl(state.jobCoordinator.server.getUrl)
   }
 
   def commandInfoUri(packagePath: String): CommandInfo.URI = CommandInfo.URI.newBuilder().setValue(packagePath).setExtract(true).build()
