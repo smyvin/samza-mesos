@@ -32,7 +32,6 @@ object MesosConfig {
   val EXECUTOR_MAX_CPU_CORES = "mesos.executor.cpu.cores"
   val EXECUTOR_MAX_DISK_MB = "mesos.executor.disk.mb"
   val EXECUTOR_ATTRIBUTES = "mesos.executor.attributes"
-  val EXECUTOR_TASK_COUNT = "mesos.executor.count"
 
   val SCHEDULER_USER = "mesos.scheduler.user"
   val SCHEDULER_ROLE = "mesos.scheduler.role"
@@ -58,8 +57,6 @@ class MesosConfig(config: Config) extends JobConfig(config) {
   def getDockerImage = getOption(MesosConfig.DOCKER_IMAGE)
 
   def getDockerEntrypointArguments = getList(MesosConfig.DOCKER_ENTRYPOINT_ARGUMENTS, Nil)
-
-  def getTaskCount: Option[Int] = getOption(MesosConfig.EXECUTOR_TASK_COUNT).map(_.toInt)
 
   def getJmxServerEnabled = getBoolean(MesosConfig.SCHEDULER_JMX_ENABLED, true)
 

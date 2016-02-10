@@ -63,16 +63,11 @@ class SamzaSchedulerState(config: Config) extends Logging {
   var currentStatus: ApplicationStatus = New //TODO should this get updated to other values at some point? possible values are: New, Running, SuccessfulFinish, UnsuccessfulFinish
 
   val jobCoordinator: JobCoordinator = JobCoordinator(config)
-  val initialSamzaTaskIDs = jobCoordinator.jobModel.getContainers.keySet.map(_.toInt).toSet
 
-  val samzaContainerCount: Int = config.getTaskCount.getOrElse({
-    info(s"No ${MesosConfig.EXECUTOR_TASK_COUNT} specified. Defaulting to one Samza container (i.e. one Mesos task).")
-    1
-  })
-  debug(s"Samza container (i.e. Mesos task) count: ${samzaContainerCount}")
+  debug(s"Samza container (i.e. Mesos task) count: ${config.getContainerCount}")
 
-  val samzaContainerIds = (0 until samzaContainerCount).toSet
-  debug(s"Samza container IDs: ${samzaContainerIds}")
+  val samzaContainerIds = jobCoordinator.jobModel.getContainers.keySet.map(_.toInt).toSet
+  debug(s"Samza container IDs: $samzaContainerIds")
 
 //  val samzaContainerIdToSSPTaskNames: Map[Int, TaskNamesToSystemStreamPartitions] =
 //    Util.assignContainerToSSPTaskNames(config, samzaContainerCount)
@@ -127,7 +122,7 @@ class SamzaSchedulerState(config: Config) extends Logging {
       val newTaskId = newTask.mesosTaskId
       mesosTasks += (newTaskId -> newTask)
       unclaimedTaskIdSet += newTaskId
-      info(s"Mesos task ${taskId} failed, was replaced with ${newTaskId} and will be re-scheduled")
+      info(s"Mesos task $taskId failed, was replaced with $newTaskId and will be re-scheduled")
     }
   }
 
