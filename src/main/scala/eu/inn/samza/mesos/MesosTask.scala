@@ -19,14 +19,12 @@
 
 package eu.inn.samza.mesos
 
-import java.util.{Map => JMap}
-import java.util.UUID
+import java.util.{Map => JMap, UUID}
 
+import eu.inn.samza.mesos.MesosConfig.Config2Mesos
 import org.apache.mesos.Protos._
 import org.apache.samza.config.Config
-import eu.inn.samza.mesos.MesosConfig.Config2Mesos
 import org.apache.samza.config.TaskConfig.Config2Task
-import org.apache.samza.container.TaskNamesToSystemStreamPartitions
 import org.apache.samza.job.{CommandBuilder, ShellCommandBuilder}
 import org.apache.samza.util.Logging
 
@@ -39,19 +37,18 @@ class MesosTask(config: Config,
   /** When the returned task's ID is accessed, it will be created with a new UUID. */
   def copyWithNewId: MesosTask = new MesosTask(config, state, samzaContainerId)
 
-  lazy val mesosTaskId: String = s"${config.getName.get}-samza-container-${samzaContainerId}-${UUID.randomUUID.toString}"
+  lazy val mesosTaskId: String = s"${config.getName.get}-samza-container-$samzaContainerId-${UUID.randomUUID.toString}"
   lazy val mesosTaskName: String = mesosTaskId
 
-  lazy val samzaContainerName: String = s"${config.getName.get}-container-${samzaContainerId}"
+  lazy val samzaContainerName: String = s"${config.getName.get}-container-$samzaContainerId"
 
   //TODO the code below here could use some refactoring, especially related to the config.getPackagePath vs config.getDockerImage logic...
 
   lazy val getSamzaCommandBuilder: CommandBuilder = {
-    val sspTaskNames: TaskNamesToSystemStreamPartitions = state.samzaContainerIdToSSPTaskNames.getOrElse(samzaContainerId, TaskNamesToSystemStreamPartitions())
     val cmdBuilderClassName = config.getCommandClass.getOrElse(classOf[ShellCommandBuilder].getName)
     Class.forName(cmdBuilderClassName).newInstance.asInstanceOf[CommandBuilder]
       .setConfig(config)
-      .setId(samzaTaskId)
+      .setId(samzaContainerId)
       .setUrl(state.jobCoordinator.server.getUrl)
   }
 
