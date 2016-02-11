@@ -26,6 +26,14 @@
     <mesos.version>0.26.0</mesos.version>
   </properties>
 
+  <distributionManagement>
+    <snapshotRepository>
+      <id>fuseboss.snapshots.http</id>
+      <name>FuseBoss Snapshots Repository</name>
+      <url>http://nexus.tradeintel.com/content/repositories/thirdparty-snapshots/</url>
+    </snapshotRepository>
+  </distributionManagement>
+
   <dependencies>
     <dependency>
       <groupId>org.scala-lang</groupId>
