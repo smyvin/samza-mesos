@@ -75,15 +75,21 @@ class MesosJob(config: Config) extends StreamJob with Logging {
   }
 
   def kill: StreamJob = {
+    info("Killing current job")
+    state.jobCoordinator.stop
     //Mesos stops all of this framework's tasks and completely removes this framework, then the call to run below finally returns
     //although I think if we do driver.stop(true) then Mesos will not stop the tasks; we'd have to explicitly stop them here, probably using driver.killTask(taskId)
     //the boolean param for stop() is failover - this allows the framework's tasks to keep running, then when the framework restarts it should use same frameworkId as the previous one
     driver.stop()
+    state.currentStatus = ApplicationStatus.SuccessfulFinish
     this
   }
 
   //Samza calls this method to start the job
   def submit: StreamJob = {
+    info("Submitting new job")
+    state.jobCoordinator.start
+    state.currentStatus = ApplicationStatus.Running
     driver.run() //this blocks until the MesosSchedulerDriver is stopped in the kill method (i.e. the entire time this framework is running)
     this
   }
